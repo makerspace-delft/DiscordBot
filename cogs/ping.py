@@ -8,7 +8,7 @@ class Ping(commands.Cog):
     @commands.command()
     async def ping(self, ctx: commands.Context):
         print("pong")
-        await ctx.send("Pong")
+        await ctx.send("Pong!")
     
 async def setup(bot: commands.Bot):
     await bot.add_cog(Ping(bot))

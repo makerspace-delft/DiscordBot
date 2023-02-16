@@ -33,13 +33,16 @@ class Ditto(commands.Cog):
             message = i['text']
             
             if userid not in self.users:
-                self.users[userid] = self.client.users_info(user = userid)          
+                self.users[userid] = self.client.users_info(user = userid)  
+                
             
             username = self.users[userid]["user"]["real_name"]
             
             if "image" not in self.users:
                 
-                url = self.users[userid]["user"]["profile"]["image_original"]
+                
+                
+                url = self.users[userid]["user"]["profile"]["image_72"]
                 image = BytesIO(requests.get(url).content)
                 
                 self.users["imageBytes"] = image.getvalue()

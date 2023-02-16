@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import discord
 from discord.ext import commands
 
@@ -8,6 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 TOKEN = getenv('DISCORD_TOKEN')
 
+discord.utils.setup_logging(level = logging.INFO)
 bot = commands.Bot(command_prefix="!", intents = discord.Intents.all())
 
 @bot.event
