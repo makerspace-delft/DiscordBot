@@ -11,7 +11,7 @@ from io import BytesIO
 class Ditto(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.client = WebClient(token=getenv('TOKEN2'))
+        self.client = WebClient(token=getenv('SLACK_TOKEN'))
         self.users = {} 
         
 
@@ -54,5 +54,5 @@ class Ditto(commands.Cog):
                 await webhook.delete()
     
 
-def setup(bot: commands.Bot):
-    bot.add_cog(Ditto(bot))
+async def setup(bot: commands.Bot):
+    await bot.add_cog(Ditto(bot))

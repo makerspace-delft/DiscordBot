@@ -1,6 +1,6 @@
-# fly.toml file generated for lively-snow-11 on 2023-02-16T18:47:54+01:00
+# fly.toml file generated for makerspace-discord-bot on 2023-02-16T21:30:26+01:00
 
-app = "lively-snow-11"
+app = "makerspace-discord-bot"
 kill_signal = "SIGINT"
 kill_timeout = 5
 processes = []
