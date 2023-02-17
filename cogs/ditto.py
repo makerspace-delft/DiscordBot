@@ -1,5 +1,7 @@
-import discord
+import discord, time
 from discord.ext import commands
+
+from pprint import pprint
 
 from slack_sdk import WebClient
 
@@ -25,8 +27,9 @@ class Ditto(commands.Cog):
                 await webhook.delete()
                 
     @commands.command()
-    async def sendmessages(self, ctx: commands.Context, channelid: str, limit = 5):
+    async def sendmessages(self, ctx: commands.Context, channelid: str, limit = 5):  
         response = self.client.conversations_history(channel=channelid)
+        limit = min(limit, len(response["messages"]))
 
         # Iterating through all instances of message
         for i in response["messages"][:limit][::-1]:
@@ -34,9 +37,7 @@ class Ditto(commands.Cog):
             userid = i['user']
             message = i['text']
             
-
             # If it current user doesn't exist in local dictonary
-            # make API request
             if userid not in self.users:
                 self.users[userid] = self.client.users_info(user = userid)  
                 
@@ -49,48 +50,51 @@ class Ditto(commands.Cog):
                 image = BytesIO(requests.get(url).content)
                 
                 self.users["imageBytes"] = image.getvalue()
-        
+
+            webhook = await ctx.channel.create_webhook(name=username, avatar = self.users["imageBytes"])
+            current = await webhook.send(message, wait=True, username=username)
+            await webhook.delete()
+
             if "thread_ts" in i:
                 # We have a parent message of a thread
                 if i['thread_ts'] == i['ts']:
                     # Create the orginal thread message
-                    thread = await ctx.channel.create_thread(name=message, message=i, type=discord.ChannelType.public_thread )
+                    msg = await current.fetch()
+                    thread = await msg.create_thread(name=message[:min(len(message), 90)], auto_archive_duration=1440)
                     
                     # Getting a dictonary of replies
-                    replies = client.conversations_replies(
+                    replies = self.client.conversations_replies(
                         channel=channelid,
                         ts = i['ts']
                     )
 
+
+
                     # We skip the first message as this is the one that created the thread
                     for reply in replies['messages'][1:]:
                         replyuserid = reply['user']
+                        response = reply['text']
                         # If it current user doesn't exist in local dictonary
                         # make API request
                         if replyuserid not in self.users:
                             self.users[replyuserid] = self.client.users_info(user = replyuserid)  
                             
                         # Get the username
-                        username = self.users[replyuserid]["user"]["real_name"]
+                        responder = self.users[replyuserid]["user"]["real_name"]
+
 
                         # Get the image if not defined.
                         if "image" not in self.users:
                             url = self.users[replyuserid]["user"]["profile"]["image_72"]
                             image = BytesIO(requests.get(url).content)
                             self.users["imageBytes"] = image.getvalue()
-                        
-                        # the api doesn't let you send with user ref i think
-                        thread.send()
-                    
-                        
 
+                        webhookResponse = await ctx.channel.create_webhook(name=responder, avatar = self.users["imageBytes"])
+                        await webhookResponse.send(response, username=responder, thread=thread)   
+                        await webhookResponse.delete() 
+                        time.sleep(1)
             else:
-                webhook = await ctx.channel.create_webhook(name=username, avatar = self.users["imageBytes"])
-                await webhook.send(message, username=username)
-        
-        webhooks = await ctx.channel.webhooks()
-        for webhook in webhooks:
-                await webhook.delete()
+                time.sleep(1)
     
 
 async def setup(bot: commands.Bot):

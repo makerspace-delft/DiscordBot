@@ -4,7 +4,7 @@
 
 ```bash
 cp .env.sample .env
-pip install -r requirments.txt
+pip install -r requirements.txt
 python main.py
 ```
 
