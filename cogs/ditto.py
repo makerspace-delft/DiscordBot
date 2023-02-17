@@ -27,30 +27,66 @@ class Ditto(commands.Cog):
     @commands.command()
     async def sendmessages(self, ctx: commands.Context, channelid: str, limit = 5):
         response = self.client.conversations_history(channel=channelid)
-        
+
+        # Iterating through all instances of message
         for i in response["messages"][:limit][::-1]:
+            # Declaring the userid and message
             userid = i['user']
             message = i['text']
             
+
+            # If it current user doesn't exist in local dictonary
+            # make API request
             if userid not in self.users:
                 self.users[userid] = self.client.users_info(user = userid)  
                 
-            
+            # Get the username
             username = self.users[userid]["user"]["real_name"]
-            
+
+            # Get the image if not defined.
             if "image" not in self.users:
-                
-                
-                
                 url = self.users[userid]["user"]["profile"]["image_72"]
                 image = BytesIO(requests.get(url).content)
                 
                 self.users["imageBytes"] = image.getvalue()
-            
-            
-            webhook = await ctx.channel.create_webhook(name=username, avatar = self.users["imageBytes"])
-            await webhook.send(message, username=username)
-            
+        
+            if "thread_ts" in i:
+                # We have a parent message of a thread
+                if i['thread_ts'] == i['ts']:
+                    # Create the orginal thread message
+                    thread = await ctx.channel.create_thread(name=message, message=i, type=discord.ChannelType.public_thread )
+                    
+                    # Getting a dictonary of replies
+                    replies = client.conversations_replies(
+                        channel=channelid,
+                        ts = i['ts']
+                    )
+
+                    # We skip the first message as this is the one that created the thread
+                    for reply in replies['messages'][1:]:
+                        replyuserid = reply['user']
+                        # If it current user doesn't exist in local dictonary
+                        # make API request
+                        if replyuserid not in self.users:
+                            self.users[replyuserid] = self.client.users_info(user = replyuserid)  
+                            
+                        # Get the username
+                        username = self.users[replyuserid]["user"]["real_name"]
+
+                        # Get the image if not defined.
+                        if "image" not in self.users:
+                            url = self.users[replyuserid]["user"]["profile"]["image_72"]
+                            image = BytesIO(requests.get(url).content)
+                            self.users["imageBytes"] = image.getvalue()
+                        
+                        # the api doesn't let you send with user ref i think
+                        thread.send()
+                    
+                        
+
+            else:
+                webhook = await ctx.channel.create_webhook(name=username, avatar = self.users["imageBytes"])
+                await webhook.send(message, username=username)
         
         webhooks = await ctx.channel.webhooks()
         for webhook in webhooks:
