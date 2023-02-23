@@ -1,15 +1,11 @@
-from asyncio.log import logger
-import discord, time, requests
+from unicodedata import category
+import discord, time
+from discord import app_commands
 from discord.ext import commands
-
+from asyncio.log import logger
 from pprint import pprint
-import slack
-
-from slack_sdk import WebClient
-
+from slack_sdk import WebClient, errors
 from os import getenv
-
-from io import BytesIO
 
 
 
@@ -20,31 +16,28 @@ class Ditto(commands.Cog):
         self.users = {}
     
     @commands.command()
-    async def ditto(self, ctx: commands.Context, name, *msg):
-        webhook = await ctx.channel.create_webhook(name=name)
-        await webhook.send(" ".join(msg), username=name)
-
-        webhooks = await ctx.channel.webhooks()
-        for webhook in webhooks:
-                await webhook.delete()
+    async def sync(self, ctx: commands.Context):
+        fmt = await ctx.bot.tree.sync(guild = ctx.guild)
+        await ctx.send(f"Synced {len(fmt)} commands")
+        
     
-    @commands.command()
-    async def webhooks(self, ctx: commands.Context):
-        webhook = await ctx.channel.create_webhook(name = "webhook")
-        for i in range(20):
-            await webhook.send(str(i), username = str(i))
-            time.sleep(1)
+    @app_commands.command(name = "ditto", description="ditto someone")
+    async def ditto(self, interaction: discord.Interaction, name: str, msg: str):
+        webhook = await interaction.channel.create_webhook(name=name)
+        interaction.response.is_done
+        await webhook.send(msg, username=name)
         await webhook.delete()
+    
                 
-    @commands.command()
-    async def migrate(self, ctx: commands.Context, channelid: str, limit = 5):  
+    @app_commands.command(name = "migrate", description="Migrate messages from a slack channel")
+    async def migrate(self, interaction: discord.Interaction, channelid: str, limit: int = 5):  
         response = self.client.conversations_history(channel=channelid)
         limit = min(limit, len(response["messages"]))
         
-        for webhook in await ctx.channel.webhooks():
+        for webhook in await interaction.channel.webhooks():
             await webhook.delete()
         
-        webhook = await ctx.channel.create_webhook(name = "webhook")
+        webhook = await interaction.channel.create_webhook(name = "webhook")
 
         # Iterating through all instances of message
         for i in response["messages"][:limit][::-1]:
@@ -94,12 +87,26 @@ class Ditto(commands.Cog):
                                        username=rusername, 
                                        thread=thread,
                                        avatar_url = responder["user"]["profile"]["image_72"])
-                await thread.clo   
 
         await webhook.delete()
                 
+    @app_commands.command(name = "migrateprivate", description = "Migrate messeges from a private slack channel")
+    async def migrateprivate(self, interaction: discord.Interaction, channelid: str, limit: int = 5):
+        
+        try:
+            response = self.client.conversations_history(channel=channelid)
+        except errors.SlackApiError as err:
+            print("Unable to find channel\n", err)
+            await interaction.response.send_message("Make sure to add @Scraper to that channel.")
+            return
+
+
+        category = discord.utils.get(interaction.guild.categories, id = 1071808452088836167)
+
+        channel = await interaction.guild.create_text_channel(f'{channelid}', category=category)
+        
         
     
-
+                
 async def setup(bot: commands.Bot):
-    await bot.add_cog(Ditto(bot))
+    await bot.add_cog(Ditto(bot), guilds = [discord.Object(id = 1071769053091352677)])
