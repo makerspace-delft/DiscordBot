@@ -25,6 +25,21 @@ class Ditto(commands.Cog):
         interaction.response.is_done
         await webhook.send(msg, username=name)
         await webhook.delete()
+        
+    def formatmsg(self, message: str) -> str:
+        new_message = message
+        for j in range(len(message)):
+            try:
+                if message[j:j+2] == "<@" and message[j+13] == '>':
+                    user = message[j+2:j+13]
+
+                    if user not in self.users:
+                        self.users[user] = self.client.users_info(user = user).data  
+
+                    new_message = new_message.replace("<@" + user + ">", "@" + self.users[user]["user"]["real_name"])
+            except: pass
+            
+        return new_message
     
                 
     @app_commands.command(name = "migrate", description="Migrate messages from a slack channel")
@@ -41,26 +56,12 @@ class Ditto(commands.Cog):
         for i in response["messages"][:limit][::-1]:
             time.sleep(1)
             userid = i['user']
-            message = i['text']                
+            message = self.formatmsg(i['text'])
 
             # If it current user doesn't exist in local dictonary
             if userid not in self.users:
                 self.users[userid] = self.client.users_info(user = userid).data  
-
-            new_message = message
-            for j in range(len(message)):
-                try:
-                    if message[j:j+2] == "<@" and message[j+13] == '>':
-                        user = message[j+2:j+13]
-
-                        if user not in self.users:
-                            self.users[user] = self.client.users_info(user = user).data  
-
-                        new_message = new_message.replace("<@" + user + ">", "@" + self.users[user]["user"]["real_name"])
-                except: pass
                 
-            message = new_message
-    
             slackuser = self.users[userid]              
             username = slackuser["user"]["real_name"]
             
@@ -85,28 +86,12 @@ class Ditto(commands.Cog):
                 # We skip the first message as this is the one that created the thread
                 for reply in replies['messages'][1:]:
                     replyuserid = reply['user']
-                    response = reply['text']
-                    # If it current user doesn't exist in local dictonary
-                    # make API request
+                    response = self.formatmsg(reply['text'])
+                    
                     if replyuserid not in self.users:
-                        self.users[replyuserid] = self.client.users_info(user = replyuserid).data  
-
-
-                    new_message = response
-                    for j in range(len(message)):
-                        try:
-                            if response[j:j+2] == "<@" and response[j+13] == '>':
-                                user = response[j+2:j+13]
-
-                                if user not in self.users:
-                                    self.users[user] = self.client.users_info(user = user).data  
-
-                                new_message = new_message.replace("<@" + user + ">", "@" + self.users[user]["user"]["real_name"])
-                        except: pass
+                        self.users[replyuserid] = self.client.users_info(user = replyuserid).data   
                         
-                    response = new_message    
-
-                    # Get the username
+                    
                     rusername = self.users[replyuserid]["user"]["real_name"]
                     responder = self.users[replyuserid]
 
