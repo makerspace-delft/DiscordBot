@@ -7,6 +7,7 @@ from asyncio.log import logger
 from pprint import pprint
 from slack_sdk import WebClient, errors
 from os import getenv
+import re
 
 class Ditto(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -42,6 +43,10 @@ class Ditto(commands.Cog):
                 
                 
             except: pass 
+        
+        new_message = re.sub(r'\*<([^|]+)\|[^>]+>\*', r'\1', new_message)
+         # replace <https://BLANK> with https://BLANK
+        new_message = re.sub(r'<([^>]+)>', r'\1', new_message)
 
         return new_message
 
@@ -53,9 +58,9 @@ class Ditto(commands.Cog):
 
         # Iterating through all instances of message
         for i in response["messages"][:limit][::-1]:
+            time.sleep(6)
             webhook = await channel.create_webhook(name = "webhook")
             
-            time.sleep(1)
             userid = i['user']
             message = self.formatmsg(i['text'])
 
@@ -75,7 +80,6 @@ class Ditto(commands.Cog):
             
             # We have a parent message of a thread
             if "thread_ts" in i and i['thread_ts'] == i['ts']:
-                
                 # Create the orginal thread message
                 msg = await current.fetch()
                 thread = await msg.create_thread(name=message[:min(len(message), 90)], auto_archive_duration=1440)
@@ -88,6 +92,7 @@ class Ditto(commands.Cog):
 
                 # We skip the first message as this is the one that created the thread
                 for reply in replies['messages'][1:]:
+                    time.sleep(6)
                     replyuserid = reply['user']
                     response = self.formatmsg(reply['text'])
                     
@@ -107,9 +112,6 @@ class Ditto(commands.Cog):
                                        avatar_url = responder["user"]["profile"]["image_72"])
                 
                     await webhook.delete()
-                    time.sleep(1)
-
-        await webhook.delete()
     
                 
     @app_commands.command(name = "migrate", description="Migrate messages from a slack channel")
@@ -120,7 +122,7 @@ class Ditto(commands.Cog):
             await interaction.response.send_message("Channel not found. Make sure to add @Scraper to that channel. You can do that by pinging @Scraper in slack")
             return
                 
-        await interaction.response.send_message(f"Migrating {len(response['messages'])} messages")
+        await interaction.response.send_message(f"Migrating {limit} messages")
         
         await self.sendmessages(interaction.channel, channelid, limit, response)
 
