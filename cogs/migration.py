@@ -1,3 +1,4 @@
+from code import interact
 from unicodedata import category
 import discord, time
 from discord import app_commands
@@ -27,6 +28,7 @@ class Ditto(commands.Cog):
         await webhook.delete()
         
     def formatmsg(self, message: str) -> str:
+        
         new_message = message
         for j in range(len(message)):
             try:
@@ -37,23 +39,22 @@ class Ditto(commands.Cog):
                         self.users[user] = self.client.users_info(user = user).data  
 
                     new_message = new_message.replace("<@" + user + ">", "@" + self.users[user]["user"]["real_name"])
-            except: pass
-            
-        return new_message
-    
                 
-    @app_commands.command(name = "migrate", description="Migrate messages from a slack channel")
-    async def migrate(self, interaction: discord.Interaction, channelid: str, limit: int = 5):  
-        response = self.client.conversations_history(channel=channelid)
-        limit = min(limit, len(response["messages"]))
-        
-        for webhook in await interaction.channel.webhooks():
+                
+            except: pass 
+
+        return new_message
+
+    
+    async def sendmessages(self, channel: discord.Interaction.channel, channelid: str, limit: int, response: dict):
+
+        for webhook in await channel.webhooks():
             await webhook.delete()
-        
-        webhook = await interaction.channel.create_webhook(name = "webhook")
 
         # Iterating through all instances of message
         for i in response["messages"][:limit][::-1]:
+            webhook = await channel.create_webhook(name = "webhook")
+            
             time.sleep(1)
             userid = i['user']
             message = self.formatmsg(i['text'])
@@ -70,6 +71,8 @@ class Ditto(commands.Cog):
                                          username=username, 
                                          avatar_url=slackuser["user"]["profile"]["image_72"])
 
+            await webhook.delete()
+            
             # We have a parent message of a thread
             if "thread_ts" in i and i['thread_ts'] == i['ts']:
                 
@@ -94,14 +97,33 @@ class Ditto(commands.Cog):
                     
                     rusername = self.users[replyuserid]["user"]["real_name"]
                     responder = self.users[replyuserid]
+                    
+                    webhook = await channel.create_webhook(name = "webhook")
+                    
 
                     await webhook.send(response, 
                                        username=rusername, 
                                        thread=thread,
                                        avatar_url = responder["user"]["profile"]["image_72"])
+                
+                    await webhook.delete()
+                    time.sleep(1)
 
         await webhook.delete()
+    
                 
+    @app_commands.command(name = "migrate", description="Migrate messages from a slack channel")
+    async def migrate(self, interaction: discord.Interaction, channelid: str, limit: int = 5):  
+        try:
+            response = self.client.conversations_history(channel=channelid)
+        except errors.SlackApiError as err:
+            await interaction.response.send_message("Channel not found. Make sure to add @Scraper to that channel. You can do that by pinging @Scraper in slack")
+            return
+                
+        await interaction.response.send_message(f"Migrating {len(response['messages'])} messages")
+        
+        await self.sendmessages(interaction.channel, channelid, limit, response)
+
     @app_commands.command(name = "migrateprivate", description = "Migrate messeges from a private slack channel")
     async def migrateprivate(self, interaction: discord.Interaction, channelid: str, limit: int = 5):
         
@@ -109,14 +131,24 @@ class Ditto(commands.Cog):
             response = self.client.conversations_history(channel=channelid)
         except errors.SlackApiError as err:
             print("Unable to find channel\n", err)
-            await interaction.response.send_message("Make sure to add @Scraper to that channel.")
+            await interaction.response.send_message("Make sure to add @Scraper to that channel. You can do that by pinging @Scraper in slack")
             return
-
-
+        
         category = discord.utils.get(interaction.guild.categories, id = 1071808452088836167)
+        
+        for channel in category.channels:
+            if channel.name == channelid.lower():
+                await channel.set_permissions(interaction.user, read_messages=True, send_messages=False)
+                await interaction.response.send_message(f"Channel already exists, I have added you to <#{channel.id}>!")
+                
+                return
 
         channel = await interaction.guild.create_text_channel(f'{channelid}', category=category)
+        await channel.set_permissions(interaction.user, read_messages=True, send_messages=False)
         
+        await interaction.response.send_message(f"Created a private channel for you: <#{channel.id}>! Message will be loaded soon \:D")
+        
+        await self.sendmessages(channel, channelid, limit, response)
         
     
                 
