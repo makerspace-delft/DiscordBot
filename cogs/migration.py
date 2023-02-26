@@ -54,8 +54,7 @@ class Ditto(commands.Cog):
         # Iterating through all instances of message
         for i in response["messages"][:limit][::-1]:
             webhook = await channel.create_webhook(name = "webhook")
-            
-            time.sleep(1)
+
             userid = i['user']
             message = self.formatmsg(i['text'])
 
