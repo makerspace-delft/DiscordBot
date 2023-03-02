@@ -47,6 +47,8 @@ class Ditto(commands.Cog):
         new_message = re.sub(r'\*<([^|]+)\|[^>]+>\*', r'\1', new_message)
          # replace <https://BLANK> with https://BLANK
         new_message = re.sub(r'<([^>]+)>', r'\1', new_message)
+        
+        new_message = new_message.replace("*", "**")
 
         return new_message
 
@@ -58,7 +60,7 @@ class Ditto(commands.Cog):
 
         # Iterating through all instances of message
         for i in response["messages"][:limit][::-1]:
-            time.sleep(6)
+            time.sleep(7)
             webhook = await channel.create_webhook(name = "webhook")
             userid = i['user']
             message = self.formatmsg(i['text'])
@@ -75,6 +77,7 @@ class Ditto(commands.Cog):
                                          username=username, 
                                          avatar_url=slackuser["user"]["profile"]["image_72"])
 
+            
             await webhook.delete()
             
             # We have a parent message of a thread
@@ -91,7 +94,7 @@ class Ditto(commands.Cog):
 
                 # We skip the first message as this is the one that created the thread
                 for reply in replies['messages'][1:]:
-                    time.sleep(6)
+                    time.sleep(7)
                     replyuserid = reply['user']
                     response = self.formatmsg(reply['text'])
                     
@@ -120,6 +123,8 @@ class Ditto(commands.Cog):
         except errors.SlackApiError as err:
             await interaction.response.send_message("Channel not found. Make sure to add @Scraper to that channel. You can do that by pinging @Scraper in slack")
             return
+        
+        limit = min(limit, len(response["messages"]))
                 
         await interaction.response.send_message(f"Migrating {limit} messages")
         
