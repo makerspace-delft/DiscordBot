@@ -11,7 +11,7 @@ from os import getenv
 import re
 
 
-timeout = 5
+timeout = 10
 
 class Ditto(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -61,6 +61,8 @@ class Ditto(commands.Cog):
 
         for webhook in await channel.webhooks():
             await webhook.delete()
+        
+        webhook = await channel.create_webhook(name = "webhook")
 
         # Iterating through all instances of message
         for index, i in enumerate(response["messages"][:limit][::-1]):
@@ -69,7 +71,6 @@ class Ditto(commands.Cog):
             
             print(f"{index+1} messages migrated out of {limit}", end = "\r")
             
-            webhook = await channel.create_webhook(name = "webhook")
             userid = i['user']
             message = self.formatmsg(i['text'])
 
@@ -142,6 +143,8 @@ class Ditto(commands.Cog):
         await interaction.response.send_message(f"Migrating {limit} messages")
         
         await self.sendmessages(interaction.channel, channelid, limit, response)
+        
+        await interaction.response.send_message(f"Successfully Migrated {limit} messages")
 
     @app_commands.command(name = "migrateprivate", description = "Migrate messeges from a private slack channel")
     async def migrateprivate(self, interaction: discord.Interaction, channelid: str, limit: int = 5):
