@@ -57,22 +57,35 @@ class Ditto(commands.Cog):
         return new_message
 
     
-    async def sendmessages(self, channel: discord.Interaction.channel, channelid: str, limit: int, response: dict):
+    async def sendmessages(self, channel: discord.Interaction.channel, channelid: str, limit: int, response: dict, after: str):
 
         for webhook in await channel.webhooks():
             await webhook.delete()
         
         webhook = await channel.create_webhook(name = "webhook")
-
+        
+        messages = response["messages"]
+        
+        end = len(messages)
+        
+        for index, msg in enumerate(messages):
+            if msg['ts'] == after:
+                end = index
+        
+        lastMessage = None
         # Iterating through all instances of message
-        for index, i in enumerate(response["messages"][:limit][::-1]):
-            
+        for index, slackMessage in enumerate(messages[:end][::-1][:limit] if after else messages[:limit][::-1]):        
             await sleep(timeout)
-            
             print(f"{index+1} messages migrated out of {limit}", end = "\r")
             
-            userid = i['user']
-            message = self.formatmsg(i['text'])
+            userid = slackMessage['user']
+            message = self.formatmsg(slackMessage['text'])
+            lastMessage = slackMessage['ts']
+            
+            if "files" in slackMessage:
+                for file in slackMessage['files']:
+                    filetype = file['pretty_type']
+                    message += f"\n**{filetype}**: {file['url_private']}"
 
             # If it current user doesn't exist in local dictonary
             if userid not in self.users:
@@ -81,16 +94,13 @@ class Ditto(commands.Cog):
             slackuser = self.users[userid]              
             username = slackuser["user"]["real_name"]
             
-            current = await webhook.send(message, 
+            current = await webhook.send(slackMessage["text"], 
                                          wait=True, 
                                          username=username, 
                                          avatar_url=slackuser["user"]["profile"]["image_72"])
-
-            
-            # await webhook.delete()
-            
+               
             # We have a parent message of a thread
-            if "thread_ts" in i and i['thread_ts'] == i['ts']:
+            if "thread_ts" in slackMessage and slackMessage['thread_ts'] == slackMessage['ts']:
                 # Create the orginal thread message
                 msg = await current.fetch()
                 thread = await msg.create_thread(name=message[:min(len(message), 90)], auto_archive_duration=1440)
@@ -98,12 +108,11 @@ class Ditto(commands.Cog):
                 # Getting a dictonary of replies
                 replies = self.client.conversations_replies(
                     channel=channelid,
-                    ts = i['ts']
+                    ts = slackMessage['ts']
                 )
 
                 # We skip the first message as this is the one that created the thread
-                for rindex, reply in enumerate(replies['messages'][1:]):
-                    
+                for rindex, reply in enumerate(replies['messages'][1:]):  
                     await sleep(timeout)
                     
                     print(f"{rindex+1} replies migrated out of {len(replies['messages'])}", end = "\r")
@@ -114,24 +123,22 @@ class Ditto(commands.Cog):
                     if replyuserid not in self.users:
                         self.users[replyuserid] = self.client.users_info(user = replyuserid).data   
                         
-                    
                     rusername = self.users[replyuserid]["user"]["real_name"]
                     responder = self.users[replyuserid]
-                    
-                    # webhook = await channel.create_webhook(name = "webhook")
-                    
 
                     await webhook.send(response, 
                                        username=rusername, 
                                        thread=thread,
                                        avatar_url = responder["user"]["profile"]["image_72"])
-                
-                
+        
+        await webhook.delete()              
         print("\nMigrated all messages!")
+        
+        return lastMessage
     
                 
     @app_commands.command(name = "migrate", description="Migrate messages from a slack channel")
-    async def migrate(self, interaction: discord.Interaction, channelid: str, limit: int = 5):  
+    async def migrate(self, interaction: discord.Interaction, channelid: str, limit: int = 5, after: str = None):  
         try:
             response = self.client.conversations_history(channel=channelid)
         except errors.SlackApiError as err:
@@ -142,9 +149,11 @@ class Ditto(commands.Cog):
                 
         await interaction.response.send_message(f"Migrating {limit} messages")
         
-        await self.sendmessages(interaction.channel, channelid, limit, response)
+        lastmessage = await self.sendmessages(interaction.channel, channelid, limit, response, after)
         
-        await interaction.response.send_message(f"Successfully Migrated {limit} messages")
+        await interaction.channel.send(f"Successfully migrated {limit} messages")
+        if lastmessage:
+            await interaction.channel.send(f"Last message TS is {lastmessage}")
 
     @app_commands.command(name = "migrateprivate", description = "Migrate messeges from a private slack channel")
     async def migrateprivate(self, interaction: discord.Interaction, channelid: str, limit: int = 5):
