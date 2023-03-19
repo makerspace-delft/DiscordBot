@@ -1,23 +1,26 @@
-from code import interact
-from unicodedata import category
-import discord, time
+from asyncio.log import logger
+import os
+import discord
 from discord import app_commands
 from discord.ext import commands
-from asyncio.log import logger
 from asyncio import sleep
 from pprint import pprint
+import requests, shutil
 from slack_sdk import WebClient, errors
 from os import getenv
 import re
 
 
-timeout = 10
+TIMEOUT = 10
 
 class Ditto(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.client = WebClient(token=getenv('SLACK_TOKEN'))
         self.users = {}
+        self.cookies = {
+            "d": getenv('SLACK_USER')
+        }
     
     @commands.command()
     async def sync(self, ctx: commands.Context):
@@ -58,11 +61,10 @@ class Ditto(commands.Cog):
 
     
     async def sendmessages(self, channel: discord.Interaction.channel, channelid: str, limit: int, response: dict, after: str):
-
         for webhook in await channel.webhooks():
             await webhook.delete()
         
-        webhook = await channel.create_webhook(name = "webhook")
+        webhook: discord.Webhook = await channel.create_webhook(name = "webhook")
         
         messages = response["messages"]
         
@@ -75,18 +77,15 @@ class Ditto(commands.Cog):
         lastMessage = None
         # Iterating through all instances of message
         for index, slackMessage in enumerate(messages[:end][::-1][:limit] if after else messages[:limit][::-1]):        
-            await sleep(timeout)
-            print(f"{index+1} messages migrated out of {limit}", end = "\r")
+            await sleep(TIMEOUT)
+            
+            logger.log(20, f"{index+1} messages migrated out of {limit}")
+            # print(f"{index+1} messages migrated out of {limit}", end = "\r")
             
             userid = slackMessage['user']
             message = self.formatmsg(slackMessage['text'])
             lastMessage = slackMessage['ts']
             
-            if "files" in slackMessage:
-                for file in slackMessage['files']:
-                    filetype = file['pretty_type']
-                    message += f"\n**{filetype}**: {file['url_private']}"
-
             # If it current user doesn't exist in local dictonary
             if userid not in self.users:
                 self.users[userid] = self.client.users_info(user = userid).data  
@@ -94,10 +93,41 @@ class Ditto(commands.Cog):
             slackuser = self.users[userid]              
             username = slackuser["user"]["real_name"]
             
-            current = await webhook.send(slackMessage["text"], 
+            current = await webhook.send(message,
                                          wait=True, 
                                          username=username, 
                                          avatar_url=slackuser["user"]["profile"]["image_72"])
+            
+            if "files" in slackMessage:
+                filemsg = "";
+                for file in slackMessage['files']:
+                    if (file['size'] <= 8 * 1000 * 1000):
+                        fileResponse = requests.get(file['url_private'], cookies=self.cookies, stream=True)
+                        with open(file['name'], 'wb') as out_file:
+                            fileResponse.raw.decode_content = True
+                            shutil.copyfileobj(fileResponse.raw, out_file)
+
+                        del fileResponse
+                        
+                        await sleep(TIMEOUT)
+                        
+                        await webhook.send(file=discord.File(file['name']), 
+                                           wait = True, 
+                                           username=username, 
+                                           avatar_url=slackuser["user"]["profile"]["image_72"]),
+                        os.remove(file['name'])
+                        
+                    else:
+                        filetype = file['pretty_type']
+                        filemsg += f"\n**{filetype}**: {file['url_private']}"
+                
+                if filemsg != "":
+                    await webhook.send(filemsg, 
+                                        wait = True, 
+                                        username=username, 
+                                        avatar_url=slackuser["user"]["profile"]["image_72"]),
+
+         
                
             # We have a parent message of a thread
             if "thread_ts" in slackMessage and slackMessage['thread_ts'] == slackMessage['ts']:
@@ -113,7 +143,7 @@ class Ditto(commands.Cog):
 
                 # We skip the first message as this is the one that created the thread
                 for rindex, reply in enumerate(replies['messages'][1:]):  
-                    await sleep(timeout)
+                    await sleep(TIMEOUT)
                     
                     print(f"{rindex+1} replies migrated out of {len(replies['messages'])}", end = "\r")
                     
@@ -140,7 +170,7 @@ class Ditto(commands.Cog):
     @app_commands.command(name = "migrate", description="Migrate messages from a slack channel")
     async def migrate(self, interaction: discord.Interaction, channelid: str, limit: int = 5, after: str = None):  
         try:
-            response = self.client.conversations_history(channel=channelid)
+            response = self.client.conversations_history(channel=channelid, limit=1000)
         except errors.SlackApiError as err:
             await interaction.response.send_message("Channel not found. Make sure to add @Scraper to that channel. You can do that by pinging @Scraper in slack")
             return
@@ -166,6 +196,7 @@ class Ditto(commands.Cog):
             return
         
         category = discord.utils.get(interaction.guild.categories, id = 1071808452088836167)
+
         
         for channel in category.channels:
             if channel.name == channelid.lower():
@@ -182,6 +213,5 @@ class Ditto(commands.Cog):
         await self.sendmessages(channel, channelid, limit, response)
         
     
-                
 async def setup(bot: commands.Bot):
     await bot.add_cog(Ditto(bot), guilds = [discord.Object(id = 1071769053091352677)])
