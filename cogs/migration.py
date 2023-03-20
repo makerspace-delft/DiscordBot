@@ -21,6 +21,7 @@ class Ditto(commands.Cog):
         self.cookies = {
             "d": getenv('SLACK_USER')
         }
+        self.lastTs = None
     
     @commands.command()
     async def sync(self, ctx: commands.Context):
@@ -68,19 +69,26 @@ class Ditto(commands.Cog):
         
         messages = response["messages"]
         
+        channel = self.client.conversations_info(channel=channelid).data["channel"]["name"]
+        
         end = len(messages)
         
         for index, msg in enumerate(messages):
             if msg['ts'] == after:
                 end = index
+                
+        total = len(messages[:end][::-1][:limit] if after else messages[:limit][::-1])
         
         lastMessage = None
         # Iterating through all instances of message
         for index, slackMessage in enumerate(messages[:end][::-1][:limit] if after else messages[:limit][::-1]):        
             await sleep(TIMEOUT)
             
-            logger.log(20, f"{index+1} messages migrated out of {limit}")
+            logger.log(20, f"{channel.upper()} {index+1} messages migrated out of {total} ts: {slackMessage['ts']}")
             # print(f"{index+1} messages migrated out of {limit}", end = "\r")
+            
+            if "user" not in slackMessage:
+                continue
             
             userid = slackMessage['user']
             message = self.formatmsg(slackMessage['text'])
