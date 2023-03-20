@@ -59,6 +59,8 @@ class Ditto(commands.Cog):
         new_message = new_message.replace("*", "**")
 
         return new_message
+    
+    
 
     
     async def sendmessages(self, channel: discord.Interaction.channel, channelid: str, limit: int, response: dict, after: str):
@@ -67,7 +69,7 @@ class Ditto(commands.Cog):
         
         webhook: discord.Webhook = await channel.create_webhook(name = "webhook")
         
-        messages = response["messages"]
+        messages = (response["messages"])
         
         channel = self.client.conversations_info(channel=channelid).data["channel"]["name"]
         
@@ -100,11 +102,14 @@ class Ditto(commands.Cog):
                 
             slackuser = self.users[userid]              
             username = slackuser["user"]["real_name"]
+
             
-            current = await webhook.send(message,
-                                         wait=True, 
-                                         username=username, 
-                                         avatar_url=slackuser["user"]["profile"]["image_72"])
+            for i in range(0, len(message), 2000):
+                current = await webhook.send(message[i:min(len(message), i+2000)],
+                                                wait=True,
+                                                username=username,
+                                                avatar_url=slackuser["user"]["profile"]["image_72"])
+        
             
             if "files" in slackMessage:
                 filemsg = "";
