@@ -88,92 +88,96 @@ class Ditto(commands.Cog):
             
             logger.log(20, f"{channel.upper()} {index+1} messages migrated out of {total} ts: {slackMessage['ts']}")
             # print(f"{index+1} messages migrated out of {limit}", end = "\r")
-            
-            if "user" not in slackMessage:
-                continue
-            
-            userid = slackMessage['user']
-            message = self.formatmsg(slackMessage['text'])
-            lastMessage = slackMessage['ts']
-            
-            # If it current user doesn't exist in local dictonary
-            if userid not in self.users:
-                self.users[userid] = self.client.users_info(user = userid).data  
+            try:
+                if "user" not in slackMessage:
+                    continue
                 
-            slackuser = self.users[userid]              
-            username = slackuser["user"]["real_name"]
+                userid = slackMessage['user']
+                message = self.formatmsg(slackMessage['text'])
+                lastMessage = slackMessage['ts']
+                
+                # If it current user doesn't exist in local dictonary
+                if userid not in self.users:
+                    self.users[userid] = self.client.users_info(user = userid).data  
+                    
+                slackuser = self.users[userid]           
+                username = slackuser["user"]["profile"]["display_name"]
+
+
+                
+                for i in range(0, len(message), 2000):
+                    current = await webhook.send(message[i:min(len(message), i+2000)],
+                                                    wait=True,
+                                                    username=username,
+                                                    avatar_url=slackuser["user"]["profile"]["image_72"])
+            
+                
+                if "files" in slackMessage:
+                    filemsg = "";
+                    for file in slackMessage['files']:
+                        if (file['size'] <= 8 * 1000 * 1000):
+                            fileResponse = requests.get(file['url_private'], cookies=self.cookies, stream=True)
+                            with open(file['name'], 'wb') as out_file:
+                                fileResponse.raw.decode_content = True
+                                shutil.copyfileobj(fileResponse.raw, out_file)
+
+                            del fileResponse
+                            
+                            await sleep(TIMEOUT)
+                            
+                            current = await webhook.send(file=discord.File(file['name']), 
+                                            wait = True, 
+                                            username=username, 
+                                            avatar_url=slackuser["user"]["profile"]["image_72"])
+                            os.remove(file['name'])
+                            
+                        else:
+                            filetype = file['pretty_type']
+                            filemsg += f"\n**{filetype}**: {file['url_private']}"
+                    
+                    if filemsg != "":
+                        current = await webhook.send(filemsg, 
+                                            wait = True, 
+                                            username=username, 
+                                            avatar_url=slackuser["user"]["profile"]["image_72"])
 
             
-            for i in range(0, len(message), 2000):
-                current = await webhook.send(message[i:min(len(message), i+2000)],
-                                                wait=True,
-                                                username=username,
-                                                avatar_url=slackuser["user"]["profile"]["image_72"])
-        
-            
-            if "files" in slackMessage:
-                filemsg = "";
-                for file in slackMessage['files']:
-                    if (file['size'] <= 8 * 1000 * 1000):
-                        fileResponse = requests.get(file['url_private'], cookies=self.cookies, stream=True)
-                        with open(file['name'], 'wb') as out_file:
-                            fileResponse.raw.decode_content = True
-                            shutil.copyfileobj(fileResponse.raw, out_file)
+                
+                # We have a parent message of a thread
+                if "thread_ts" in slackMessage and slackMessage['thread_ts'] == slackMessage['ts']:
+                    if message == "": message = "Thread"
+                    # Create the orginal thread message
+                    msg = await current.fetch()
+                    thread = await msg.create_thread(name=message[:min(len(message), 90)], auto_archive_duration=1440)
+                    
+                    # Getting a dictonary of replies
+                    replies = self.client.conversations_replies(
+                        channel=channelid,
+                        ts = slackMessage['ts']
+                    )
 
-                        del fileResponse
-                        
+                    # We skip the first message as this is the one that created the thread
+                    for rindex, reply in enumerate(replies['messages'][1:]):  
                         await sleep(TIMEOUT)
                         
-                        await webhook.send(file=discord.File(file['name']), 
-                                           wait = True, 
-                                           username=username, 
-                                           avatar_url=slackuser["user"]["profile"]["image_72"]),
-                        os.remove(file['name'])
+                        print(f"{rindex+1} replies migrated out of {len(replies['messages'])}", end = "\r")
                         
-                    else:
-                        filetype = file['pretty_type']
-                        filemsg += f"\n**{filetype}**: {file['url_private']}"
-                
-                if filemsg != "":
-                    await webhook.send(filemsg, 
-                                        wait = True, 
-                                        username=username, 
-                                        avatar_url=slackuser["user"]["profile"]["image_72"]),
-
-         
-               
-            # We have a parent message of a thread
-            if "thread_ts" in slackMessage and slackMessage['thread_ts'] == slackMessage['ts']:
-                # Create the orginal thread message
-                msg = await current.fetch()
-                thread = await msg.create_thread(name=message[:min(len(message), 90)], auto_archive_duration=1440)
-                
-                # Getting a dictonary of replies
-                replies = self.client.conversations_replies(
-                    channel=channelid,
-                    ts = slackMessage['ts']
-                )
-
-                # We skip the first message as this is the one that created the thread
-                for rindex, reply in enumerate(replies['messages'][1:]):  
-                    await sleep(TIMEOUT)
-                    
-                    print(f"{rindex+1} replies migrated out of {len(replies['messages'])}", end = "\r")
-                    
-                    replyuserid = reply['user']
-                    response = self.formatmsg(reply['text'])
-                    
-                    if replyuserid not in self.users:
-                        self.users[replyuserid] = self.client.users_info(user = replyuserid).data   
+                        replyuserid = reply['user']
+                        response = self.formatmsg(reply['text'])
                         
-                    rusername = self.users[replyuserid]["user"]["real_name"]
-                    responder = self.users[replyuserid]
+                        if replyuserid not in self.users:
+                            self.users[replyuserid] = self.client.users_info(user = replyuserid).data   
+                            
+                        rusername = self.users[replyuserid]["user"]["real_name"]
+                        responder = self.users[replyuserid]
 
-                    await webhook.send(response, 
-                                       username=rusername, 
-                                       thread=thread,
-                                       avatar_url = responder["user"]["profile"]["image_72"])
+                        await webhook.send(response, 
+                                        username=rusername, 
+                                        thread=thread,
+                                        avatar_url = responder["user"]["profile"]["image_72"])
         
+            except Exception as e:
+                logger.log(40, f"Error: {e}")
         await webhook.delete()              
         print("\nMigrated all messages!")
         
