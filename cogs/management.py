@@ -40,8 +40,6 @@ class Management(commands.Cog):
             return False
         return True
     
-    # A decorator to ensure the command can be used in the group
-
     @app_commands.command(name = "createchannel", description="Creates a channel and adds the caller to the private channel")
     async def createchannel(self, interaction: discord.Interaction, group: str, name:str, visibility: str = "private"):
         ctx = await self.bot.get_context(interaction)
