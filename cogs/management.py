@@ -25,21 +25,28 @@ class Management(commands.Cog):
             return False
         return True
     
+    def remove_emoji(self, text):
+        return re.sub(r'[^\w\s]','',text).strip()
+    
     def check_can_create_in_category(self, ctx, category):
         member = ctx.author
         roles = member.roles
-        category = re.sub(r'[^\w\s]','',category).strip()
+        category = self.remove_emoji(category)
         if not get(roles, name=category) and not get(roles, name="Admin"):
             return False
         return True
     
     def check_category_exists(self, ctx, category):
         guild = ctx.guild
-        cat = discord.utils.get(guild.categories, name=category)
-        if not cat:
-            return False
-        return True
+        return any(self.remove_emoji(category) == self.remove_emoji(cat.name) for cat in guild.categories)
     
+    def get_real_category(self, ctx, category):
+        guild = ctx.guild
+        for cat in guild.categories:
+            if self.remove_emoji(category) == self.remove_emoji(cat.name):
+                return cat
+        return None
+
     @app_commands.command(name = "createchannel", description="Creates a channel and adds the caller to the private channel")
     async def createchannel(self, interaction: discord.Interaction, group: str, name:str, visibility: str = "private"):
         ctx = await self.bot.get_context(interaction)
@@ -66,7 +73,7 @@ class Management(commands.Cog):
                 admin_role: discord.PermissionOverwrite(read_messages=True)
             }
 
-        cat = discord.utils.get(guild.categories, name=group)
+        cat = self.get_real_category(ctx, group)
         if not cat:
             cat = await guild.create_category(group)
 
@@ -103,7 +110,7 @@ class Management(commands.Cog):
                 admin_role: discord.PermissionOverwrite(read_messages=True)
             }
 
-        cat = discord.utils.get(guild.categories, name=group)
+        cat = self.get_real_category(ctx, group)
         if not cat:
             cat = await guild.create_category(group)
 
