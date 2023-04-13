@@ -63,7 +63,6 @@ class Management(commands.Cog):
             }
         else:
             overwrites = {
-                guild.default_role: discord.PermissionOverwrite(read_messages=True),
                 admin_role: discord.PermissionOverwrite(read_messages=True)
             }
 
@@ -72,6 +71,10 @@ class Management(commands.Cog):
             cat = await guild.create_category(group)
 
         channel = await guild.create_text_channel(name, overwrites=overwrites, category=cat)
+        
+        if visibility != "private":
+            await channel.edit(sync_permissions=True)
+
         await interaction.response.send_message(f"Channel {channel.mention} created")
 
     @app_commands.command(name = "createvoicechannel", description="Creates a voice channel and adds the caller to the private channel")
@@ -97,7 +100,6 @@ class Management(commands.Cog):
             }
         else:
             overwrites = {
-                guild.default_role: discord.PermissionOverwrite(read_messages=True),
                 admin_role: discord.PermissionOverwrite(read_messages=True)
             }
 
@@ -106,6 +108,9 @@ class Management(commands.Cog):
             cat = await guild.create_category(group)
 
         channel = await guild.create_voice_channel(name, overwrites=overwrites, category=cat)
+
+        if visibility != "private":
+            await channel.edit(sync_permissions=True)
         await interaction.response.send_message(f"Channel {channel.mention} created")
 
     @app_commands.command(name = "addtotextchannel", description="Adds a user to a channel")
