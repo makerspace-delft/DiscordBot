@@ -28,7 +28,7 @@ class Ditto(commands.Cog):
         fmt = await ctx.bot.tree.sync(guild = ctx.guild)
         await ctx.send(f"Synced {len(fmt)} commands")
         
-    
+    @commands.has_permissions(administrator=True)
     @app_commands.command(name = "ditto", description="ditto someone")
     async def ditto(self, interaction: discord.Interaction, name: str, msg: str):
         webhook = await interaction.channel.create_webhook(name=name)
@@ -183,7 +183,7 @@ class Ditto(commands.Cog):
         
         return lastMessage
     
-                
+    @commands.has_permissions(administrator=True)           
     @app_commands.command(name = "migrate", description="Migrate messages from a slack channel")
     async def migrate(self, interaction: discord.Interaction, channelid: str, limit: int = 5, after: str = None):  
         try:
@@ -202,6 +202,7 @@ class Ditto(commands.Cog):
         if lastmessage:
             await interaction.channel.send(f"Last message TS is {lastmessage}")
 
+    @commands.has_permissions(administrator=True)
     @app_commands.command(name = "migrateprivate", description = "Migrate messeges from a private slack channel")
     async def migrateprivate(self, interaction: discord.Interaction, channelid: str, limit: int = 5):
         
